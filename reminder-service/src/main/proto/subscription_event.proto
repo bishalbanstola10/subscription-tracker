@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package subscription.events;
+option java_multiple_files=true;
+
+message SubscriptionEvent{
+     string userId = 1;
+     string serviceName = 2;
+     double price = 3;
+     string renewalDate = 4;
+     string recurrence = 5;
+}

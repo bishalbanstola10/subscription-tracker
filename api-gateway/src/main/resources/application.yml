@@ -1,0 +1,51 @@
+server:
+  port: 4004
+
+auth:
+  service:
+    url: ${AUTH_SERVICE_URL:http://auth-service:4005}
+
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowedOrigins:
+              - "http://localhost:5173"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            allowCredentials: true
+      routes:
+        - id: subscription-service-route
+          uri: ${SUBSCRIPTION_SERVICE_URL:http://subscription-service:4000}
+          predicates:
+            - Path=/api/subscriptions/**
+          filters:
+            - StripPrefix=1
+            - JWTValidation
+
+        - id: auth-service-route
+          uri: ${AUTH_SERVICE_URL:http://auth-service:4005}
+          predicates:
+            - Path=/auth/**
+          filters:
+            - StripPrefix=1
+
+        - id: api-docs-subscription-service
+          uri: ${SUBSCRIPTION_SERVICE_URL:http://subscription-service:4000}
+          predicates:
+            - Path=/api-docs/subscriptions
+          filters:
+            - RewritePath=/api-docs/subscriptions,/v3/api-docs
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty.http.client: DEBUG

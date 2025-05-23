@@ -1,0 +1,158 @@
+services:
+  subscription-db:
+    image: postgres:latest
+    container_name: subscription_db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: subscription_db
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: admin_subscription_password
+    volumes:
+      - subscription_postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+  auth-db:
+    image: postgres:latest
+    container_name: auth-service_db
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: admin_user
+      POSTGRES_PASSWORD: admin_subscription_password
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - backend
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    restart: always
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENER_NAMES: PLAINTEXT,PLAINTEXT_HOST
+      KAFKA_LISTENER_PORTS: 9092,29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL: PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - backend
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    container_name: schema-registry
+    restart: always
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      - backend
+
+  subscription-service:
+    build:
+      context: ./subscription-service
+      dockerfile: Dockerfile
+    container_name: subscription-service
+    ports:
+      - "4000:4000"
+    depends_on:
+      - kafka
+      - subscription-db
+      - schema-registry
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://subscription_db:5432/subscription_db
+      SPRING_DATASOURCE_USERNAME: admin_user
+      SPRING_DATASOURCE_PASSWORD: admin_subscription_password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_PRODUCER_KEY_SERIALIZER: org.apache.kafka.common.serialization.StringSerializer
+      SPRING_KAFKA_PRODUCER_VALUE_SERIALIZER: io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer
+      SPRING_KAFKA_PRODUCER_PROPERTIES_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      SERVER_PORT: 4000
+    networks:
+      - backend
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "4005:4005"
+    depends_on:
+      - auth-db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-service_db:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: admin_user
+      SPRING_DATASOURCE_PASSWORD: admin_subscription_password
+      SERVER_PORT: 4005
+    networks:
+      - backend
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "4004:4004"
+    environment:
+      SERVER_PORT: 4004
+    networks:
+      - backend
+
+  reminder-service:
+    build:
+      context: ./reminder-service
+      dockerfile: Dockerfile
+    container_name: reminder-service
+    ports:
+      - "4002:4002"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://reminder-service_db:5432/reminder_db
+      SPRING_DATASOURCE_USERNAME: admin_user
+      SPRING_DATASOURCE_PASSWORD: admin_subscription_password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: reminder-group
+      SPRING_KAFKA_CONSUMER_KEY_DESERIALIZER: org.apache.kafka.common.serialization.StringDeserializer
+      SPRING_KAFKA_CONSUMER_VALUE_DESERIALIZER: io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer
+      SPRING_KAFKA_PROPERTIES_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPECIFIC_PROTOBUF_VALUE_TYPE: subscription.events.SubscriptionEvent
+      SERVER_PORT: 4002
+    networks:
+      - backend
+
+volumes:
+  subscription_postgres_data:
+  auth_postgres_data:
+
+networks:
+  backend:
+    driver: bridge
