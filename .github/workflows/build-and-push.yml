@@ -23,9 +23,6 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Build JARs
-        run: mvn clean package -DskipTests -q
-
       - name: Log in to Docker Hub
         run: |
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" \
