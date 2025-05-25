@@ -22,15 +22,9 @@ jobs:
         with:
           node-version: "18"
 
-      - name: Debug repo layout
-        run: |
-          echo "PWD: $(pwd)"
-          echo "Tree:"
-          find . -maxdepth 3 -type d | sed 's/\.\///g'
-
       - name: Install & build
+        working-directory: frontend
         run: |
-          cd subscription-tracker/frontend
           npm install
           npm run build
 
@@ -43,6 +37,6 @@ jobs:
 
       - name: Sync to S3
         run: |
-          aws s3 sync subscription-tracker/frontend/build/ s3://${{ secrets.S3_BUCKET }}/ \
+          aws s3 sync frontend/build/ s3://${{ secrets.S3_BUCKET }}/ \
             --delete \
             --cache-control "public, max-age=86400"
