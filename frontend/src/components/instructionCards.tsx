@@ -2,19 +2,18 @@ const InstructionCards = () => {
   const steps = [
     {
       title: "1. Add Your Subscriptions",
-      description:
-        "Manually or automatically input your recurring subscriptions.",
-      image: "/pluspointphotoshoot.jpg",
+      description: "Input your recurring subscriptions.",
+      image: "/instruct0.jpg",
     },
     {
-      title: "2. Set Reminders",
+      title: "2. Get Reminders",
       description: "Get notified a day before any subscription renews.",
-      image: "/pluspointphotoshoot.jpg",
+      image: "/instruct1.jpg",
     },
     {
       title: "3. Stay In Control",
       description: "Cancel or manage subscriptions from one dashboard.",
-      image: "/pluspointphotoshoot.jpg",
+      image: "/instruct2.jpg",
     },
   ];
 

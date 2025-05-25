@@ -18,16 +18,29 @@ const Header = () => {
         >
           Home
         </NavLink>
-        <NavLink
-          to="/add"
-          className={({ isActive }) =>
-            isActive
-              ? "font-bold text-blue-500 border-b-2 border-blue-500"
-              : "text-black-400 bg-white"
-          }
-        >
-          Add
-        </NavLink>
+        {!isAuthenticated ? (
+          <NavLink
+            to="/add"
+            className={({ isActive }) =>
+              isActive
+                ? "font-bold text-blue-500 border-b-2 border-blue-500"
+                : "text-black-400 bg-white"
+            }
+          >
+            Add
+          </NavLink>
+        ) : (
+          <NavLink
+            to="/login"
+            className={({ isActive }) =>
+              isActive
+                ? "font-bold text-blue-500 border-b-2 border-blue-500"
+                : "text-black-400 bg-white"
+            }
+          >
+            Login
+          </NavLink>
+        )}
         {!isAuthenticated ? (
           <NavLink
             to="/register"
