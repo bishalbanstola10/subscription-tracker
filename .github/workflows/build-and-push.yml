@@ -1,128 +1,56 @@
-name: CI/CD to AWS
+name: CI/CD → Docker Hub & EC2
 
 on:
   push:
     branches:
       - main
 
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
 jobs:
   build-and-push:
-    name: Build & Push Services
+    name: Build JARs & Push Images
     runs-on: ubuntu-latest
+
     steps:
-      # 1. Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Configure AWS credentials
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          distribution: "temurin"
+          java-version: "17"
 
-      # 3. Login to Amazon ECR
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v1
+      - name: Build JARs
+        run: mvn clean package -DskipTests -q
 
-      # 4. Build & push Subscription Service
-      - name: Build & Push subscription-service
+      - name: Log in to Docker Hub
         run: |
-          IMAGE_URI=${{ secrets.ECR_ACCOUNT_URL }}/subscription-service:${GITHUB_SHA::8}
-          docker build \
-            --file subscription-service/Dockerfile \
-            --tag $IMAGE_URI \
-            subscription-service
-          docker push $IMAGE_URI
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" \
+            | docker login --username "${{ env.DOCKERHUB_USERNAME }}" --password-stdin
 
-      # 5. Build & push Auth Service
-      - name: Build & Push auth-service
+      - name: Build & Push all services
         run: |
-          IMAGE_URI=${{ secrets.ECR_ACCOUNT_URL }}/auth-service:${GITHUB_SHA::8}
-          docker build \
-            --file auth-service/Dockerfile \
-            --tag $IMAGE_URI \
-            auth-service
-          docker push $IMAGE_URI
-
-      # 6. Build & push API Gateway
-      - name: Build & Push api-gateway
-        run: |
-          IMAGE_URI=${{ secrets.ECR_ACCOUNT_URL }}/api-gateway:${GITHUB_SHA::8}
-          docker build \
-            --file api-gateway/Dockerfile \
-            --tag $IMAGE_URI \
-            api-gateway
-          docker push $IMAGE_URI
-
-      # 7. Build & push Reminder Service
-      - name: Build & Push reminder-service
-        run: |
-          IMAGE_URI=${{ secrets.ECR_ACCOUNT_URL }}/reminder-service:${GITHUB_SHA::8}
-          docker build \
-            --file reminder-service/Dockerfile \
-            --tag $IMAGE_URI \
-            reminder-service
-          docker push $IMAGE_URI
+          for svc in subscription-service auth-service api-gateway reminder-service; do
+            docker build -t ${{ env.DOCKERHUB_USERNAME }}/$svc:latest ./$svc
+            docker push ${{ env.DOCKERHUB_USERNAME }}/$svc:latest
+          done
 
   deploy:
-    name: Deploy to ECS
+    name: SSH-Deploy to EC2
     needs: build-and-push
     runs-on: ubuntu-latest
+
     steps:
-      # 1. Configure AWS credentials
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: SSH Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.5
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      # 2. Install jq for JSON processing
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      # 3. Register new task definitions & update services
-      - name: Deploy microservices to ECS
-        run: |
-          CLUSTER="subscription-tracker-cluster"
-          for SERVICE in subscription-service auth-service api-gateway reminder-service; do
-            echo "→ Deploying $SERVICE..."
-
-            IMAGE_URI="${{ secrets.ECR_ACCOUNT_URL }}/$SERVICE:${GITHUB_SHA::8}"
-
-            # Fetch the current task-definition JSON
-            TASK_DEF_JSON=$(aws ecs describe-task-definition \
-              --task-definition $SERVICE)
-
-            # Build a minimal new task-definition payload with updated image
-            NEW_DEF=$(echo "$TASK_DEF_JSON" \
-              | jq --arg IMAGE "$IMAGE_URI" \
-                  '.taskDefinition
-                   | .containerDefinitions[0].image = $IMAGE
-                   | {
-                       family: .family,
-                       containerDefinitions: [.containerDefinitions[0]],
-                       volumes: .volumes,
-                       networkMode: .networkMode,
-                       cpu: .cpu,
-                       memory: .memory,
-                       requiresCompatibilities: .requiresCompatibilities
-                     }')
-
-            # Write it out and register a new revision
-            echo "$NEW_DEF" > new-task-def.json
-            REVISION=$(aws ecs register-task-definition \
-              --cli-input-json file://new-task-def.json \
-              | jq -r '.taskDefinition.revision')
-
-            # Update the service to use the new revision
-            aws ecs update-service \
-              --cluster $CLUSTER \
-              --service $SERVICE \
-              --task-definition $SERVICE:$REVISION \
-              --force-new-deployment
-
-            echo "✔ $SERVICE deployed as revision $REVISION"
-          done
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/subscription-tracker
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
