@@ -18,7 +18,7 @@ const Header = () => {
         >
           Home
         </NavLink>
-        {!isAuthenticated ? (
+        {isAuthenticated ? (
           <NavLink
             to="/add"
             className={({ isActive }) =>
