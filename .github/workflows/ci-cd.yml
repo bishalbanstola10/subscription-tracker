@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "subscription-service/**"
+      - "auth-service/**"
+      - "api-gateway/**"
+      - "reminder-service/**"
+      - "docker-compose.prod.yml"
+      - ".env"
+      - ".github/workflows/ci-cd.yml"
 
 env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
