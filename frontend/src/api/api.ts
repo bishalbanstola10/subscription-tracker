@@ -1,9 +1,10 @@
 import axios from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:4004",
-});
+const baseURL = import.meta.env.DEV
+  ? import.meta.env.VITE_API_BASE_URL || "http://localhost:4004"
+  : "";
+const api = axios.create({ baseURL });
 
 api.interceptors.request.use(
   (config) => {
