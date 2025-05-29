@@ -13,6 +13,7 @@ spring:
           "[/**]":
             allowedOrigins:
               - "http://localhost:5173"
+              - "https://d1p78x4ozsywhg.cloudfront.net"
             allowedMethods:
               - GET
               - POST
